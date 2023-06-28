@@ -2,9 +2,9 @@
 -behaviour(gen_server).
 
 -export([
-    server_name/1,
     start_link/3,
     init/1,
+    server_name/1,
     handle_call/3,
     handle_cast/2,
     handle_info/2,
