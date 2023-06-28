@@ -1,27 +1,34 @@
 -module(poke_supervisor).
--behaviour(supervisor).
+-behavior(supervisor).
 
 -export([
-    start_link/0,
+    start_link/3,
     init/1,
-
-    start_pokee/2,
-    poke/1
+    server_name/1
 ]).
 
-start_link() ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+server_name(Name) ->
+    ModuleBinary = atom_to_binary(?MODULE, utf8),
+    NameBinary = atom_to_binary(Name, utf8),
+    binary_to_atom(<<ModuleBinary/binary, <<"$">>/binary, NameBinary/binary>>, utf8).
 
-init([]) ->
-    SupFlags = #{strategy => simple_one_for_one},
+start_link(SupServer, Name, Timeout) ->
+    ChildServer = poke_server:server_name(Name),
+    supervisor:start_link({local, SupServer}, ?MODULE, [ChildServer, Name, Timeout]).
+
+init([ChildServer, Name, Timeout]) ->
+    SupFlags = #{
+        strategy => one_for_one,
+        auto_shutdown => all_significant
+    },
     ChildSpec =
-        {poke_server, {poke_server, start_link, []}, transient, 5000, worker, [poke_server]},
+        #{
+            id => poke_server,
+            start => {poke_server, start_link, [ChildServer, Name, Timeout]},
+            restart => transient,
+            shutdown => 5000,
+            type => worker,
+            modules => [poke_server],
+            significant => true
+        },
     {ok, {SupFlags, [ChildSpec]}}.
-
-start_pokee(Name, Timeout) ->
-    Server = poke_server:server_name(Name),
-    supervisor:start_child(?MODULE, [Server, Name, Timeout]).
-
-poke(Name) ->
-    Server = poke_server:server_name(Name),
-    gen_server:call(Server, poke).
